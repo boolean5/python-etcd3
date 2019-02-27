@@ -241,6 +241,8 @@ class TestEtcd3(object):
             assert event.key == b'/doot/watch'
             assert event.value == \
                 utils.to_bytes(str(change_count))
+            # test that event has the etcd revision
+            assert event.header.revision > 0
 
             # if cancel worked, we should not receive event 3
             assert event.value != utils.to_bytes('3')

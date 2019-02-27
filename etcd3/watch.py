@@ -171,7 +171,7 @@ class Watcher(object):
             return
 
         for event in rs.events:
-            _safe_callback(callback, events.new_event(event))
+            _safe_callback(callback, events.new_event(event, rs.header))
 
     def _cancel_no_lock(self, watch_id):
         cancel_watch = etcdrpc.WatchCancelRequest()
