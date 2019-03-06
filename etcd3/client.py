@@ -553,8 +553,8 @@ class Etcd3Client(object):
         """
         event_queue = queue.Queue()
 
-        def callback(event):
-            event_queue.put(event)
+        def callback(events):
+            event_queue.put(events)
 
         watch_id = self.add_watch_callback(key, callback, **kwargs)
         canceled = threading.Event()
@@ -599,8 +599,8 @@ class Etcd3Client(object):
         """
         event_queue = queue.Queue()
 
-        def callback(event):
-            event_queue.put(event)
+        def callback(events):
+            event_queue.put(events)
 
         watch_id = self.add_watch_callback(key, callback, **kwargs)
 

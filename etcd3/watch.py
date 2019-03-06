@@ -170,8 +170,13 @@ class Watcher(object):
             self.cancel(rs.watch_id)
             return
 
-        for event in rs.events:
-            _safe_callback(callback, events.new_event(event))
+        # for event in rs.events:
+        #    _safe_callback(callback, events.new_event(event))
+        if rs.events:
+            e = []
+            for event in rs.events:
+                e.append(events.new_event(event))
+            _safe_callback(callback, e)
 
     def _cancel_no_lock(self, watch_id):
         cancel_watch = etcdrpc.WatchCancelRequest()
@@ -196,9 +201,9 @@ def _new_request_iter(_request_queue):
         yield rq
 
 
-def _safe_callback(callback, event_or_err):
+def _safe_callback(callback, events_or_err):
     try:
-        callback(event_or_err)
+        callback(events_or_err)
 
     except Exception:
         _log.exception('Watch callback failed')
