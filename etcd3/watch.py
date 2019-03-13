@@ -47,9 +47,11 @@ class Watcher(object):
         self._callback_thread = None
         self._new_watch_cond = threading.Condition(lock=self._lock)
         self._new_watch = None
+        self._start_sub_revisions = {}
 
     def add_callback(self, key, callback, range_end=None, start_revision=None,
-                     progress_notify=False, filters=None, prev_kv=False):
+                     start_sub_revision=None, progress_notify=False,
+                     filters=None, prev_kv=False):
         create_watch = etcdrpc.WatchCreateRequest()
         create_watch.key = utils.to_bytes(key)
         if range_end is not None:
@@ -79,7 +81,7 @@ class Watcher(object):
                 self._new_watch_cond.wait()
 
             # Submit a create watch request.
-            new_watch = _NewWatch(callback)
+            new_watch = _NewWatch(callback, start_sub_revision)
             self._request_queue.put(rq)
             self._new_watch = new_watch
 
@@ -102,6 +104,7 @@ class Watcher(object):
     def cancel(self, watch_id):
         with self._lock:
             callback = self._callbacks.pop(watch_id, None)
+            _ = self._start_sub_revisions.pop(watch_id, None)
             if not callback:
                 return
 
@@ -150,10 +153,16 @@ class Watcher(object):
                     return
 
                 self._callbacks[rs.watch_id] = self._new_watch.callback
+                if self._new_watch.start_sub_revision is not None:
+                    self._start_sub_revisions[rs.watch_id] = self._new_watch.start_sub_revision
+                else:
+                    self._start_sub_revisions[rs.watch_id] = 0
+
                 self._new_watch.id = rs.watch_id
                 self._new_watch_cond.notify_all()
 
             callback = self._callbacks.get(rs.watch_id)
+            # start_sub_revision = self._start_sub_revisions.get(rs.watch_id)
 
         # Ignore leftovers from canceled watches.
         if not callback:
@@ -170,8 +179,24 @@ class Watcher(object):
             self.cancel(rs.watch_id)
             return
 
-        for event in rs.events:
-            _safe_callback(callback, events.new_event(event))
+        revision = rs.header.revision
+        mod_revision = 0
+        start_sub_revision = self._start_sub_revisions[rs.watch_id]
+        # if start_sub_revision + 1 > len(rs.events)
+        # self._start_sub_revisions[rs.watch_id] = 0
+        # if rs.events[0].kv.mod_revision != 
+        sorted_events = sorted(rs.events, key=lambda x: (x.kv.mod_revision, x.kv.key))
+        for i, event in enumerate(sorted_events):
+            if mod_revision < event.kv.mod_revision:
+                mod_revision = event.kv.mod_revision
+                sub_revision = 0
+            if sub_revision >= start_sub_revision:
+                last = len(sorted_events) == i + 1 or event.kv.mod_revision != sorted_events[i+1].kv.mod_revision
+                _safe_callback(callback, events.new_event(event, revision,
+                                                          sub_revision, last))
+                # start_sub_revision = 0
+            sub_revision += 1
+            # next_sub_revision += 1
 
     def _cancel_no_lock(self, watch_id):
         cancel_watch = etcdrpc.WatchCancelRequest()
@@ -181,8 +206,9 @@ class Watcher(object):
 
 
 class _NewWatch(object):
-    def __init__(self, callback):
+    def __init__(self, callback, start_sub_revision):
         self.callback = callback
+        self.start_sub_revision = start_sub_revision
         self.id = None
         self.err = None
 
