@@ -450,9 +450,12 @@ class MaintenanceServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def Hash(self, request, context):
-    """Hash computes the hash of the KV's backend.
-    This is designed for testing; do not use this in production when there
-    are ongoing transactions.
+    """Hash computes the hash of whole backend keyspace,
+    including key, lease, and other buckets in storage.
+    This is designed for testing ONLY!
+    Do not rely on this in production with ongoing transactions,
+    since Hash operation does not hold MVCC locks.
+    Use "HashKV" API instead for "key" bucket consistency checks.
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
@@ -460,6 +463,7 @@ class MaintenanceServicer(object):
 
   def HashKV(self, request, context):
     """HashKV computes the hash of all MVCC keys up to a given revision.
+    It only iterates "key" bucket in backend storage.
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
